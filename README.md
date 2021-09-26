@@ -39,7 +39,7 @@ const (
 )
 ```
 
-Alternatively you can set up generation with
+Alternatively, in go1.17 and newer, you can set up generation with
 ```
 //go:generate go run github.com/vearutop/enumer@latest -type=Day
 ```
@@ -61,4 +61,4 @@ func (Day) Enum() []interface{} {
 }
 ```
 
-that implements [`jsonschema.Enum](https://pkg.go.dev/github.com/swaggest/jsonschema-go#Enum).
+that implements [`jsonschema.Enum`](https://pkg.go.dev/github.com/swaggest/jsonschema-go#Enum).
