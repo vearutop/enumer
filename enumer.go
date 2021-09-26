@@ -2,16 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Enumer is a tool to automate the creation of methods that satisfy the fmt.Enumer
-// interface. Given the name of a (signed or unsigned) integer type T that has constants
-// defined, enumer will create a new self-contained Go source file implementing
-//	func (t T) String() string
-// The file is created in the same package and directory as the package that defines T.
-// It has helpful defaults designed for use with go generate.
-//
-// Enumer works best with constants that are consecutive values such as created using iota,
-// but creates good code regardless. In the future it might also provide custom support for
-// constant sets that are bit patterns.
+// Enumer is a tool to automate the creation of methods that satisfy the jsonschema.Enum
+// (https://pkg.go.dev/github.com/swaggest/jsonschema-go#Enum)
+// interface.
 //
 // For example, given this snippet,
 //
@@ -31,21 +24,14 @@
 //
 //	enumer -type=Pill
 //
-// in the same directory will create the file pill_string.go, in package painkiller,
+// in the same directory will create the file pill_enum.go, in package painkiller,
 // containing a definition of
 //
-//	func (Pill) String() string
-//
-// That method will translate the value of a Pill constant to the string representation
-// of the respective constant name, so that the call fmt.Print(painkiller.Aspirin) will
-// print the string "Aspirin".
+//	func (Pill) Enum() []interface{}
 //
 // Typically this process would be run using go generate, like this:
 //
 //	//go:generate enumer -type=Pill
-//
-// If multiple constants have the same value, the lexically first matching name will
-// be used (in the example, Acetaminophen will print as "Paracetamol").
 //
 // With no arguments, it processes the package in the current directory.
 // Otherwise, the arguments must name a single directory holding a Go package
@@ -56,14 +42,6 @@
 // where t is the lower-cased name of the first type listed. It can be overridden
 // with the -output flag.
 //
-// The -linecomment flag tells enumer to generate the text of any line comment, trimmed
-// of leading spaces, instead of the constant name. For instance, if the constants above had a
-// Pill prefix, one could write
-//
-//	PillAspirin // Aspirin
-//
-// to suppress it in the output.
-//
 // This file originates from https://github.com/golang/tools/blob/master/cmd/stringer/stringer.go.
 package main
 
@@ -72,7 +50,6 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
-	"go/constant"
 	"go/format"
 	"go/token"
 	"go/types"
@@ -80,18 +57,15 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
 
 var (
-	typeNames   = flag.String("type", "", "comma-separated list of type names; must be set")
-	output      = flag.String("output", "", "output file name; default srcdir/<type>_enum.go")
-	trimprefix  = flag.String("trimprefix", "", "trim the `prefix` from the generated constant names")
-	linecomment = flag.Bool("linecomment", false, "use line comment text as printed text when present")
-	buildTags   = flag.String("tags", "", "comma-separated list of build tags to apply")
+	typeNames = flag.String("type", "", "comma-separated list of type names; must be set")
+	output    = flag.String("output", "", "output file name; default srcdir/<type>_enum.go")
+	buildTags = flag.String("tags", "", "comma-separated list of build tags to apply")
 )
 
 // Usage is a replacement usage function for the flags package.
@@ -100,7 +74,7 @@ func Usage() {
 	fmt.Fprintf(os.Stderr, "\tenumer [flags] -type T [directory]\n")
 	fmt.Fprintf(os.Stderr, "\tenumer [flags] -type T files... # Must be a single package\n")
 	fmt.Fprintf(os.Stderr, "For more information, see:\n")
-	fmt.Fprintf(os.Stderr, "\thttps://pkg.go.dev/golang.org/x/tools/cmd/enumer\n")
+	fmt.Fprintf(os.Stderr, "\thttps://pkg.go.dev/github.com/vearutop/enumer\n")
 	fmt.Fprintf(os.Stderr, "Flags:\n")
 	flag.PrintDefaults()
 }
@@ -129,11 +103,7 @@ func main() {
 
 	// Parse the package once.
 	var dir string
-	g := Generator{
-		trimPrefix:  *trimprefix,
-		lineComment: *linecomment,
-	}
-	// TODO(suzmue): accept other patterns for packages (directories, list of files, import paths, etc).
+	g := Generator{}
 	if len(args) == 1 && isDirectory(args[0]) {
 		dir = args[0]
 	} else {
@@ -150,7 +120,6 @@ func main() {
 	g.Printf("\n")
 	g.Printf("package %s", g.pkg.name)
 	g.Printf("\n")
-	g.Printf("import \"strconv\"\n") // Used by all methods.
 
 	// Run generate for each type.
 	for _, typeName := range types {
@@ -166,7 +135,7 @@ func main() {
 		baseName := fmt.Sprintf("%s_enum.go", types[0])
 		outputName = filepath.Join(dir, strings.ToLower(baseName))
 	}
-	err := ioutil.WriteFile(outputName, src, 0644)
+	err := ioutil.WriteFile(outputName, src, 0o644)
 	if err != nil {
 		log.Fatalf("writing output: %s", err)
 	}
@@ -186,9 +155,6 @@ func isDirectory(name string) bool {
 type Generator struct {
 	buf bytes.Buffer // Accumulated output.
 	pkg *Package     // Package we are scanning.
-
-	trimPrefix  string
-	lineComment bool
 }
 
 func (g *Generator) Printf(format string, args ...interface{}) {
@@ -202,9 +168,6 @@ type File struct {
 	// These fields are reset for each type being generated.
 	typeName string  // Name of the constant type.
 	values   []Value // Accumulator for constant values of that type.
-
-	trimPrefix  string
-	lineComment bool
 }
 
 type Package struct {
@@ -217,9 +180,8 @@ type Package struct {
 // parsePackage exits if there is an error.
 func (g *Generator) parsePackage(patterns []string, tags []string) {
 	cfg := &packages.Config{
-		Mode: packages.LoadSyntax,
-		// TODO: Need to think about constants in test files. Maybe write type_string_test.go
-		// in a separate pass? For later.
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedImports |
+			packages.NeedTypes | packages.NeedTypesSizes | packages.NeedSyntax | packages.NeedTypesInfo,
 		Tests:      false,
 		BuildFlags: []string{fmt.Sprintf("-tags=%s", strings.Join(tags, " "))},
 	}
@@ -243,10 +205,8 @@ func (g *Generator) addPackage(pkg *packages.Package) {
 
 	for i, file := range pkg.Syntax {
 		g.pkg.files[i] = &File{
-			file:        file,
-			pkg:         g.pkg,
-			trimPrefix:  g.trimPrefix,
-			lineComment: g.lineComment,
+			file: file,
+			pkg:  g.pkg,
 		}
 	}
 }
@@ -267,68 +227,8 @@ func (g *Generator) generate(typeName string) {
 	if len(values) == 0 {
 		log.Fatalf("no values defined for type %s", typeName)
 	}
-	// Generate code that will fail if the constants change value.
-	g.Printf("func _() {\n")
-	g.Printf("\t// An \"invalid array index\" compiler error signifies that the constant values have changed.\n")
-	g.Printf("\t// Re-run the enumer command to generate them again.\n")
-	g.Printf("\tvar x [1]struct{}\n")
-	for _, v := range values {
-		g.Printf("\t_ = x[%s - %s]\n", v.originalName, v.str)
-	}
-	g.Printf("}\n")
-	runs := splitIntoRuns(values)
-	// The decision of which pattern to use depends on the number of
-	// runs in the numbers. If there's only one, it's easy. For more than
-	// one, there's a tradeoff between complexity and size of the data
-	// and code vs. the simplicity of a map. A map takes more space,
-	// but so does the code. The decision here (crossover at 10) is
-	// arbitrary, but considers that for large numbers of runs the cost
-	// of the linear scan in the switch might become important, and
-	// rather than use yet another algorithm such as binary search,
-	// we punt and use a map. In any case, the likelihood of a map
-	// being necessary for any realistic example other than bitmasks
-	// is very low. And bitmasks probably deserve their own analysis,
-	// to be done some other day.
-	switch {
-	case len(runs) == 1:
-		g.buildOneRun(runs, typeName)
-	case len(runs) <= 10:
-		g.buildMultipleRuns(runs, typeName)
-	default:
-		g.buildMap(runs, typeName)
-	}
-}
 
-// splitIntoRuns breaks the values into runs of contiguous sequences.
-// For example, given 1,2,3,5,6,7 it returns {1,2,3},{5,6,7}.
-// The input slice is known to be non-empty.
-func splitIntoRuns(values []Value) [][]Value {
-	// We use stable sort so the lexically first name is chosen for equal elements.
-	sort.Stable(byValue(values))
-	// Remove duplicates. Stable sort has put the one we want to print first,
-	// so use that one. The String method won't care about which named constant
-	// was the argument, so the first name for the given value is the only one to keep.
-	// We need to do this because identical values would cause the switch or map
-	// to fail to compile.
-	j := 1
-	for i := 1; i < len(values); i++ {
-		if values[i].value != values[i-1].value {
-			values[j] = values[i]
-			j++
-		}
-	}
-	values = values[:j]
-	runs := make([][]Value, 0, 10)
-	for len(values) > 0 {
-		// One contiguous sequence per outer loop.
-		i := 1
-		for i < len(values) && values[i].value == values[i-1].value+1 {
-			i++
-		}
-		runs = append(runs, values[:i])
-		values = values[i:]
-	}
-	return runs
+	g.build(values, typeName)
 }
 
 // format returns the gofmt-ed contents of the Generator's buffer.
@@ -347,33 +247,6 @@ func (g *Generator) format() []byte {
 // Value represents a declared constant.
 type Value struct {
 	originalName string // The name of the constant.
-	name         string // The name with trimmed prefix.
-	// The value is stored as a bit pattern alone. The boolean tells us
-	// whether to interpret it as an int64 or a uint64; the only place
-	// this matters is when sorting.
-	// Much of the time the str field is all we need; it is printed
-	// by Value.String.
-	value  uint64 // Will be converted to int64 when needed.
-	signed bool   // Whether the constant is a signed type.
-	str    string // The string representation given by the "go/constant" package.
-}
-
-func (v *Value) String() string {
-	return v.str
-}
-
-// byValue lets us sort the constants into increasing order.
-// We take care in the Less method to sort in signed or unsigned order,
-// as appropriate.
-type byValue []Value
-
-func (b byValue) Len() int      { return len(b) }
-func (b byValue) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
-func (b byValue) Less(i, j int) bool {
-	if b[i].signed {
-		return int64(b[i].value) < int64(b[j].value)
-	}
-	return b[i].value < b[j].value
 }
 
 // genDecl processes one declaration clause.
@@ -431,39 +304,8 @@ func (f *File) genDecl(node ast.Node) bool {
 			if name.Name == "_" {
 				continue
 			}
-			// This dance lets the type checker find the values for us. It's a
-			// bit tricky: look up the object declared by the name, find its
-			// types.Const, and extract its value.
-			obj, ok := f.pkg.defs[name]
-			if !ok {
-				log.Fatalf("no value for constant %s", name)
-			}
-			info := obj.Type().Underlying().(*types.Basic).Info()
-			if info&types.IsInteger == 0 {
-				log.Fatalf("can't handle non-integer constant type %s", typ)
-			}
-			value := obj.(*types.Const).Val() // Guaranteed to succeed as this is CONST.
-			if value.Kind() != constant.Int {
-				log.Fatalf("can't happen: constant is not an integer %s", name)
-			}
-			i64, isInt := constant.Int64Val(value)
-			u64, isUint := constant.Uint64Val(value)
-			if !isInt && !isUint {
-				log.Fatalf("internal error: value of %s is not an integer: %s", name, value.String())
-			}
-			if !isInt {
-				u64 = uint64(i64)
-			}
 			v := Value{
 				originalName: name.Name,
-				value:        u64,
-				signed:       info&types.IsUnsigned == 0,
-				str:          value.String(),
-			}
-			if c := vspec.Comment; f.lineComment && c != nil && len(c.List) == 1 {
-				v.name = strings.TrimSpace(c.Text())
-			} else {
-				v.name = strings.TrimPrefix(v.originalName, f.trimPrefix)
 			}
 			f.values = append(f.values, v)
 		}
@@ -471,187 +313,14 @@ func (f *File) genDecl(node ast.Node) bool {
 	return false
 }
 
-// Helpers
-
-// usize returns the number of bits of the smallest unsigned integer
-// type that will hold n. Used to create the smallest possible slice of
-// integers to use as indexes into the concatenated strings.
-func usize(n int) int {
-	switch {
-	case n < 1<<8:
-		return 8
-	case n < 1<<16:
-		return 16
-	default:
-		// 2^32 is enough constants for anyone.
-		return 32
-	}
-}
-
-// declareIndexAndNameVars declares the index slices and concatenated names
-// strings representing the runs of values.
-func (g *Generator) declareIndexAndNameVars(runs [][]Value, typeName string) {
-	var indexes, names []string
-	for i, run := range runs {
-		index, name := g.createIndexAndNameDecl(run, typeName, fmt.Sprintf("_%d", i))
-		if len(run) != 1 {
-			indexes = append(indexes, index)
-		}
-		names = append(names, name)
-	}
-	g.Printf("const (\n")
-	for _, name := range names {
-		g.Printf("\t%s\n", name)
-	}
-	g.Printf(")\n\n")
-
-	if len(indexes) > 0 {
-		g.Printf("var (")
-		for _, index := range indexes {
-			g.Printf("\t%s\n", index)
-		}
-		g.Printf(")\n\n")
-	}
-}
-
-// declareIndexAndNameVar is the single-run version of declareIndexAndNameVars
-func (g *Generator) declareIndexAndNameVar(run []Value, typeName string) {
-	index, name := g.createIndexAndNameDecl(run, typeName, "")
-	g.Printf("const %s\n", name)
-	g.Printf("var %s\n", index)
-}
-
-// createIndexAndNameDecl returns the pair of declarations for the run. The caller will add "const" and "var".
-func (g *Generator) createIndexAndNameDecl(run []Value, typeName string, suffix string) (string, string) {
-	b := new(bytes.Buffer)
-	indexes := make([]int, len(run))
-	for i := range run {
-		b.WriteString(run[i].name)
-		indexes[i] = b.Len()
-	}
-	nameConst := fmt.Sprintf("_%s_name%s = %q", typeName, suffix, b.String())
-	nameLen := b.Len()
-	b.Reset()
-	fmt.Fprintf(b, "_%s_index%s = [...]uint%d{0, ", typeName, suffix, usize(nameLen))
-	for i, v := range indexes {
-		if i > 0 {
-			fmt.Fprintf(b, ", ")
-		}
-		fmt.Fprintf(b, "%d", v)
-	}
-	fmt.Fprintf(b, "}")
-	return b.String(), nameConst
-}
-
-// declareNameVars declares the concatenated names string representing all the values in the runs.
-func (g *Generator) declareNameVars(runs [][]Value, typeName string, suffix string) {
-	g.Printf("const _%s_name%s = \"", typeName, suffix)
-	for _, run := range runs {
-		for i := range run {
-			g.Printf("%s", run[i].name)
-		}
-	}
-	g.Printf("\"\n")
-}
-
-// buildOneRun generates the variables and String method for a single run of contiguous values.
-func (g *Generator) buildOneRun(runs [][]Value, typeName string) {
-	values := runs[0]
+func (g *Generator) build(values []Value, typeName string) {
 	g.Printf("\n")
-	g.declareIndexAndNameVar(values, typeName)
-	// The generated code is simple enough to write as a Printf format.
-	lessThanZero := ""
-	if values[0].signed {
-		lessThanZero = "i < 0 || "
+	g.Printf("// Enum returns a list of values declared for a type.\n")
+	g.Printf("func (%s) Enum() []interface{} {\n", typeName)
+	g.Printf("\treturn []interface{}{\n")
+	for _, value := range values {
+		g.Printf("\t\t%s,\n", value.originalName)
 	}
-	if values[0].value == 0 { // Signed or unsigned, 0 is still 0.
-		g.Printf(stringOneRun, typeName, usize(len(values)), lessThanZero)
-	} else {
-		g.Printf(stringOneRunWithOffset, typeName, values[0].String(), usize(len(values)), lessThanZero)
-	}
-}
-
-// Arguments to format are:
-//	[1]: type name
-//	[2]: size of index element (8 for uint8 etc.)
-//	[3]: less than zero check (for signed types)
-const stringOneRun = `func (i %[1]s) String() string {
-	if %[3]si >= %[1]s(len(_%[1]s_index)-1) {
-		return "%[1]s(" + strconv.FormatInt(int64(i), 10) + ")"
-	}
-	return _%[1]s_name[_%[1]s_index[i]:_%[1]s_index[i+1]]
-}
-`
-
-// Arguments to format are:
-//	[1]: type name
-//	[2]: lowest defined value for type, as a string
-//	[3]: size of index element (8 for uint8 etc.)
-//	[4]: less than zero check (for signed types)
-/*
- */
-const stringOneRunWithOffset = `func (i %[1]s) String() string {
-	i -= %[2]s
-	if %[4]si >= %[1]s(len(_%[1]s_index)-1) {
-		return "%[1]s(" + strconv.FormatInt(int64(i + %[2]s), 10) + ")"
-	}
-	return _%[1]s_name[_%[1]s_index[i] : _%[1]s_index[i+1]]
-}
-`
-
-// buildMultipleRuns generates the variables and String method for multiple runs of contiguous values.
-// For this pattern, a single Printf format won't do.
-func (g *Generator) buildMultipleRuns(runs [][]Value, typeName string) {
-	g.Printf("\n")
-	g.declareIndexAndNameVars(runs, typeName)
-	g.Printf("func (i %s) String() string {\n", typeName)
-	g.Printf("\tswitch {\n")
-	for i, values := range runs {
-		if len(values) == 1 {
-			g.Printf("\tcase i == %s:\n", &values[0])
-			g.Printf("\t\treturn _%s_name_%d\n", typeName, i)
-			continue
-		}
-		if values[0].value == 0 && !values[0].signed {
-			// For an unsigned lower bound of 0, "0 <= i" would be redundant.
-			g.Printf("\tcase i <= %s:\n", &values[len(values)-1])
-		} else {
-			g.Printf("\tcase %s <= i && i <= %s:\n", &values[0], &values[len(values)-1])
-		}
-		if values[0].value != 0 {
-			g.Printf("\t\ti -= %s\n", &values[0])
-		}
-		g.Printf("\t\treturn _%s_name_%d[_%s_index_%d[i]:_%s_index_%d[i+1]]\n",
-			typeName, i, typeName, i, typeName, i)
-	}
-	g.Printf("\tdefault:\n")
-	g.Printf("\t\treturn \"%s(\" + strconv.FormatInt(int64(i), 10) + \")\"\n", typeName)
 	g.Printf("\t}\n")
 	g.Printf("}\n")
 }
-
-// buildMap handles the case where the space is so sparse a map is a reasonable fallback.
-// It's a rare situation but has simple code.
-func (g *Generator) buildMap(runs [][]Value, typeName string) {
-	g.Printf("\n")
-	g.declareNameVars(runs, typeName, "")
-	g.Printf("\nvar _%s_map = map[%s]string{\n", typeName, typeName)
-	n := 0
-	for _, values := range runs {
-		for _, value := range values {
-			g.Printf("\t%s: _%s_name[%d:%d],\n", &value, typeName, n, n+len(value.name))
-			n += len(value.name)
-		}
-	}
-	g.Printf("}\n\n")
-	g.Printf(stringMap, typeName)
-}
-
-// Argument to format is the type name.
-const stringMap = `func (i %[1]s) String() string {
-	if str, ok := _%[1]s_map[i]; ok {
-		return str
-	}
-	return "%[1]s(" + strconv.FormatInt(int64(i), 10) + ")"
-}
-`
