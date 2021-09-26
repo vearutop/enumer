@@ -4,6 +4,9 @@
 GO ?= go
 export GO111MODULE = on
 
+export CGO_ENABLED = 0
+BUILD_LDFLAGS="-s -w"
+
 ifneq "$(GOFLAGS)" ""
   $(info GOFLAGS: ${GOFLAGS})
 endif
@@ -29,8 +32,9 @@ endif
 
 -include $(DEVGO_PATH)/makefiles/main.mk
 -include $(DEVGO_PATH)/makefiles/lint.mk
+-include $(DEVGO_PATH)/makefiles/release-assets.mk
+-include $(DEVGO_PATH)/makefiles/build.mk
 -include $(DEVGO_PATH)/makefiles/test-unit.mk
--include $(DEVGO_PATH)/makefiles/bench.mk
 -include $(DEVGO_PATH)/makefiles/reset-ci.mk
 
 # Add your custom targets here.

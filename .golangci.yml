@@ -20,13 +20,6 @@ linters-settings:
 linters:
   enable-all: true
   disable:
-    - errcheck
-    - gosec
-    - cyclop
-    - stylecheck
-    - revive
-    - wsl
-    - nlreturn
     - lll
     - maligned
     - gochecknoglobals
@@ -45,7 +38,6 @@ issues:
   exclude-use-default: false
   exclude-rules:
     - linters:
-        - testpackage
         - gomnd
         - goconst
         - goerr113
