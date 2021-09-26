@@ -15,29 +15,25 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"golang.org/x/tools/internal/testenv"
 )
 
 // Golden represents a test case.
 type Golden struct {
-	name        string
-	trimPrefix  string
-	lineComment bool
-	input       string // input; the package clause is provided when running the test.
-	output      string // expected output.
+	name   string
+	input  string // input; the package clause is provided when running the test.
+	output string // expected output.
 }
 
 var golden = []Golden{
-	{"day", "", false, day_in, day_out},
-	{"offset", "", false, offset_in, offset_out},
-	{"gap", "", false, gap_in, gap_out},
-	{"num", "", false, num_in, num_out},
-	{"unum", "", false, unum_in, unum_out},
-	{"unumpos", "", false, unumpos_in, unumpos_out},
-	{"prime", "", false, prime_in, prime_out},
-	{"prefix", "Type", false, prefix_in, prefix_out},
-	{"tokens", "", true, tokens_in, tokens_out},
+	{name: "day", input: day_in, output: day_out},
+	{name: "offset", input: offset_in, output: offset_out},
+	{name: "gap", input: gap_in, output: gap_out},
+	{name: "num", input: num_in, output: num_out},
+	{name: "unum", input: unum_in, output: unum_out},
+	{name: "unumpos", input: unumpos_in, output: unumpos_out},
+	{name: "prime", input: prime_in, output: prime_out},
+	{name: "prefix", input: prefix_in, output: prefix_out},
+	{name: "tokens", input: tokens_in, output: tokens_out},
 }
 
 // Each example starts with "type XXX [u]int", with a single space separating them.
@@ -55,28 +51,18 @@ const (
 )
 `
 
-const day_out = `func _() {
-	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
-	var x [1]struct{}
-	_ = x[Monday-0]
-	_ = x[Tuesday-1]
-	_ = x[Wednesday-2]
-	_ = x[Thursday-3]
-	_ = x[Friday-4]
-	_ = x[Saturday-5]
-	_ = x[Sunday-6]
-}
-
-const _Day_name = "MondayTuesdayWednesdayThursdayFridaySaturdaySunday"
-
-var _Day_index = [...]uint8{0, 6, 13, 22, 30, 36, 44, 50}
-
-func (i Day) String() string {
-	if i < 0 || i >= Day(len(_Day_index)-1) {
-		return "Day(" + strconv.FormatInt(int64(i), 10) + ")"
+const day_out = `
+// Enum returns a list of values declared for a type.
+func (Day) Enum() []interface{} {
+	return []interface{}{
+		Monday,
+		Tuesday,
+		Wednesday,
+		Thursday,
+		Friday,
+		Saturday,
+		Sunday,
 	}
-	return _Day_name[_Day_index[i]:_Day_index[i+1]]
 }
 `
 
@@ -92,25 +78,14 @@ const (
 )
 `
 
-const offset_out = `func _() {
-	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
-	var x [1]struct{}
-	_ = x[One-1]
-	_ = x[Two-2]
-	_ = x[Three-3]
-}
-
-const _Number_name = "OneTwoThree"
-
-var _Number_index = [...]uint8{0, 3, 6, 11}
-
-func (i Number) String() string {
-	i -= 1
-	if i < 0 || i >= Number(len(_Number_index)-1) {
-		return "Number(" + strconv.FormatInt(int64(i+1), 10) + ")"
+const offset_out = `
+// Enum returns a list of values declared for a type.
+func (Number) Enum() []interface{} {
+	return []interface{}{
+		One,
+		Two,
+		Three,
 	}
-	return _Number_name[_Number_index[i]:_Number_index[i+1]]
 }
 `
 
@@ -128,43 +103,18 @@ const (
 )
 `
 
-const gap_out = `func _() {
-	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
-	var x [1]struct{}
-	_ = x[Two-2]
-	_ = x[Three-3]
-	_ = x[Five-5]
-	_ = x[Six-6]
-	_ = x[Seven-7]
-	_ = x[Eight-8]
-	_ = x[Nine-9]
-	_ = x[Eleven-11]
-}
-
-const (
-	_Gap_name_0 = "TwoThree"
-	_Gap_name_1 = "FiveSixSevenEightNine"
-	_Gap_name_2 = "Eleven"
-)
-
-var (
-	_Gap_index_0 = [...]uint8{0, 3, 8}
-	_Gap_index_1 = [...]uint8{0, 4, 7, 12, 17, 21}
-)
-
-func (i Gap) String() string {
-	switch {
-	case 2 <= i && i <= 3:
-		i -= 2
-		return _Gap_name_0[_Gap_index_0[i]:_Gap_index_0[i+1]]
-	case 5 <= i && i <= 9:
-		i -= 5
-		return _Gap_name_1[_Gap_index_1[i]:_Gap_index_1[i+1]]
-	case i == 11:
-		return _Gap_name_2
-	default:
-		return "Gap(" + strconv.FormatInt(int64(i), 10) + ")"
+const gap_out = `
+// Enum returns a list of values declared for a type.
+func (Gap) Enum() []interface{} {
+	return []interface{}{
+		Two,
+		Three,
+		Five,
+		Six,
+		Seven,
+		Eight,
+		Nine,
+		Eleven,
 	}
 }
 `
@@ -180,27 +130,16 @@ const (
 )
 `
 
-const num_out = `func _() {
-	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
-	var x [1]struct{}
-	_ = x[m_2 - -2]
-	_ = x[m_1 - -1]
-	_ = x[m0-0]
-	_ = x[m1-1]
-	_ = x[m2-2]
-}
-
-const _Num_name = "m_2m_1m0m1m2"
-
-var _Num_index = [...]uint8{0, 3, 6, 8, 10, 12}
-
-func (i Num) String() string {
-	i -= -2
-	if i < 0 || i >= Num(len(_Num_index)-1) {
-		return "Num(" + strconv.FormatInt(int64(i+-2), 10) + ")"
+const num_out = `
+// Enum returns a list of values declared for a type.
+func (Num) Enum() []interface{} {
+	return []interface{}{
+		m_2,
+		m_1,
+		m0,
+		m1,
+		m2,
 	}
-	return _Num_name[_Num_index[i]:_Num_index[i+1]]
 }
 `
 
@@ -218,36 +157,15 @@ const (
 )
 `
 
-const unum_out = `func _() {
-	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
-	var x [1]struct{}
-	_ = x[m_2-253]
-	_ = x[m_1-254]
-	_ = x[m0-0]
-	_ = x[m1-1]
-	_ = x[m2-2]
-}
-
-const (
-	_Unum_name_0 = "m0m1m2"
-	_Unum_name_1 = "m_2m_1"
-)
-
-var (
-	_Unum_index_0 = [...]uint8{0, 2, 4, 6}
-	_Unum_index_1 = [...]uint8{0, 3, 6}
-)
-
-func (i Unum) String() string {
-	switch {
-	case i <= 2:
-		return _Unum_name_0[_Unum_index_0[i]:_Unum_index_0[i+1]]
-	case 253 <= i && i <= 254:
-		i -= 253
-		return _Unum_name_1[_Unum_index_1[i]:_Unum_index_1[i+1]]
-	default:
-		return "Unum(" + strconv.FormatInt(int64(i), 10) + ")"
+const unum_out = `
+// Enum returns a list of values declared for a type.
+func (Unum) Enum() []interface{} {
+	return []interface{}{
+		m_2,
+		m_1,
+		m0,
+		m1,
+		m2,
 	}
 }
 `
@@ -266,43 +184,21 @@ const (
 )
 `
 
-const unumpos_out = `func _() {
-	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
-	var x [1]struct{}
-	_ = x[m253-253]
-	_ = x[m254-254]
-	_ = x[m1-1]
-	_ = x[m2-2]
-	_ = x[m3-3]
-}
-
-const (
-	_Unumpos_name_0 = "m1m2m3"
-	_Unumpos_name_1 = "m253m254"
-)
-
-var (
-	_Unumpos_index_0 = [...]uint8{0, 2, 4, 6}
-	_Unumpos_index_1 = [...]uint8{0, 4, 8}
-)
-
-func (i Unumpos) String() string {
-	switch {
-	case 1 <= i && i <= 3:
-		i -= 1
-		return _Unumpos_name_0[_Unumpos_index_0[i]:_Unumpos_index_0[i+1]]
-	case 253 <= i && i <= 254:
-		i -= 253
-		return _Unumpos_name_1[_Unumpos_index_1[i]:_Unumpos_index_1[i+1]]
-	default:
-		return "Unumpos(" + strconv.FormatInt(int64(i), 10) + ")"
+const unumpos_out = `
+// Enum returns a list of values declared for a type.
+func (Unumpos) Enum() []interface{} {
+	return []interface{}{
+		m253,
+		m254,
+		m1,
+		m2,
+		m3,
 	}
 }
 `
 
 // Enough gaps to trigger a map implementation of the method.
-// Also includes a duplicate to test that it doesn't cause problems
+// Also includes a duplicate to test that it doesn't cause problems.
 const prime_in = `type Prime int
 const (
 	p2 Prime = 2
@@ -322,49 +218,25 @@ const (
 )
 `
 
-const prime_out = `func _() {
-	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
-	var x [1]struct{}
-	_ = x[p2-2]
-	_ = x[p3-3]
-	_ = x[p5-5]
-	_ = x[p7-7]
-	_ = x[p77-7]
-	_ = x[p11-11]
-	_ = x[p13-13]
-	_ = x[p17-17]
-	_ = x[p19-19]
-	_ = x[p23-23]
-	_ = x[p29-29]
-	_ = x[p37-31]
-	_ = x[p41-41]
-	_ = x[p43-43]
-}
-
-const _Prime_name = "p2p3p5p7p11p13p17p19p23p29p37p41p43"
-
-var _Prime_map = map[Prime]string{
-	2:  _Prime_name[0:2],
-	3:  _Prime_name[2:4],
-	5:  _Prime_name[4:6],
-	7:  _Prime_name[6:8],
-	11: _Prime_name[8:11],
-	13: _Prime_name[11:14],
-	17: _Prime_name[14:17],
-	19: _Prime_name[17:20],
-	23: _Prime_name[20:23],
-	29: _Prime_name[23:26],
-	31: _Prime_name[26:29],
-	41: _Prime_name[29:32],
-	43: _Prime_name[32:35],
-}
-
-func (i Prime) String() string {
-	if str, ok := _Prime_map[i]; ok {
-		return str
+const prime_out = `
+// Enum returns a list of values declared for a type.
+func (Prime) Enum() []interface{} {
+	return []interface{}{
+		p2,
+		p3,
+		p5,
+		p7,
+		p77,
+		p11,
+		p13,
+		p17,
+		p19,
+		p23,
+		p29,
+		p37,
+		p41,
+		p43,
 	}
-	return "Prime(" + strconv.FormatInt(int64(i), 10) + ")"
 }
 `
 
@@ -380,28 +252,18 @@ const (
 )
 `
 
-const prefix_out = `func _() {
-	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
-	var x [1]struct{}
-	_ = x[TypeInt-0]
-	_ = x[TypeString-1]
-	_ = x[TypeFloat-2]
-	_ = x[TypeRune-3]
-	_ = x[TypeByte-4]
-	_ = x[TypeStruct-5]
-	_ = x[TypeSlice-6]
-}
-
-const _Type_name = "IntStringFloatRuneByteStructSlice"
-
-var _Type_index = [...]uint8{0, 3, 9, 14, 18, 22, 28, 33}
-
-func (i Type) String() string {
-	if i < 0 || i >= Type(len(_Type_index)-1) {
-		return "Type(" + strconv.FormatInt(int64(i), 10) + ")"
+const prefix_out = `
+// Enum returns a list of values declared for a type.
+func (Type) Enum() []interface{} {
+	return []interface{}{
+		TypeInt,
+		TypeString,
+		TypeFloat,
+		TypeRune,
+		TypeByte,
+		TypeStruct,
+		TypeSlice,
 	}
-	return _Type_name[_Type_index[i]:_Type_index[i+1]]
 }
 `
 
@@ -422,51 +284,36 @@ const (
 )
 `
 
-const tokens_out = `func _() {
-	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
-	var x [1]struct{}
-	_ = x[And-0]
-	_ = x[Or-1]
-	_ = x[Add-2]
-	_ = x[Sub-3]
-	_ = x[Ident-4]
-	_ = x[Period-5]
-	_ = x[SingleBefore-6]
-	_ = x[BeforeAndInline-7]
-	_ = x[InlineGeneral-8]
-}
-
-const _Token_name = "&|+-Ident.SingleBeforeinlineinline general"
-
-var _Token_index = [...]uint8{0, 1, 2, 3, 4, 9, 10, 22, 28, 42}
-
-func (i Token) String() string {
-	if i < 0 || i >= Token(len(_Token_index)-1) {
-		return "Token(" + strconv.FormatInt(int64(i), 10) + ")"
+const tokens_out = `
+// Enum returns a list of values declared for a type.
+func (Token) Enum() []interface{} {
+	return []interface{}{
+		And,
+		Or,
+		Add,
+		Sub,
+		Ident,
+		Period,
+		SingleBefore,
+		BeforeAndInline,
+		InlineGeneral,
 	}
-	return _Token_name[_Token_index[i]:_Token_index[i+1]]
 }
 `
 
 func TestGolden(t *testing.T) {
-	testenv.NeedsTool(t, "go")
-
-	dir, err := ioutil.TempDir("", "stringer")
+	dir, err := ioutil.TempDir("", "enumer")
 	if err != nil {
 		t.Error(err)
 	}
 	defer os.RemoveAll(dir)
 
 	for _, test := range golden {
-		g := Generator{
-			trimPrefix:  test.trimPrefix,
-			lineComment: test.lineComment,
-		}
+		g := Generator{}
 		input := "package test\n" + test.input
 		file := test.name + ".go"
 		absFile := filepath.Join(dir, file)
-		err := ioutil.WriteFile(absFile, []byte(input), 0644)
+		err := ioutil.WriteFile(absFile, []byte(input), 0o600)
 		if err != nil {
 			t.Error(err)
 		}
@@ -480,6 +327,8 @@ func TestGolden(t *testing.T) {
 		g.generate(tokens[1])
 		got := string(g.format())
 		if got != test.output {
+			println(got)
+			// return
 			t.Errorf("%s: got(%d)\n====\n%q====\nexpected(%d)\n====%q", test.name, len(got), got, len(test.output), test.output)
 		}
 	}
