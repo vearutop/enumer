@@ -15,8 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"golang.org/x/tools/internal/testenv"
 )
 
 // Golden represents a test case.
@@ -57,7 +55,7 @@ const (
 
 const day_out = `func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
+	// Re-run the enumer command to generate them again.
 	var x [1]struct{}
 	_ = x[Monday-0]
 	_ = x[Tuesday-1]
@@ -94,7 +92,7 @@ const (
 
 const offset_out = `func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
+	// Re-run the enumer command to generate them again.
 	var x [1]struct{}
 	_ = x[One-1]
 	_ = x[Two-2]
@@ -130,7 +128,7 @@ const (
 
 const gap_out = `func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
+	// Re-run the enumer command to generate them again.
 	var x [1]struct{}
 	_ = x[Two-2]
 	_ = x[Three-3]
@@ -182,7 +180,7 @@ const (
 
 const num_out = `func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
+	// Re-run the enumer command to generate them again.
 	var x [1]struct{}
 	_ = x[m_2 - -2]
 	_ = x[m_1 - -1]
@@ -220,7 +218,7 @@ const (
 
 const unum_out = `func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
+	// Re-run the enumer command to generate them again.
 	var x [1]struct{}
 	_ = x[m_2-253]
 	_ = x[m_1-254]
@@ -268,7 +266,7 @@ const (
 
 const unumpos_out = `func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
+	// Re-run the enumer command to generate them again.
 	var x [1]struct{}
 	_ = x[m253-253]
 	_ = x[m254-254]
@@ -324,7 +322,7 @@ const (
 
 const prime_out = `func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
+	// Re-run the enumer command to generate them again.
 	var x [1]struct{}
 	_ = x[p2-2]
 	_ = x[p3-3]
@@ -382,7 +380,7 @@ const (
 
 const prefix_out = `func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
+	// Re-run the enumer command to generate them again.
 	var x [1]struct{}
 	_ = x[TypeInt-0]
 	_ = x[TypeString-1]
@@ -424,7 +422,7 @@ const (
 
 const tokens_out = `func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
+	// Re-run the enumer command to generate them again.
 	var x [1]struct{}
 	_ = x[And-0]
 	_ = x[Or-1]
@@ -450,9 +448,7 @@ func (i Token) String() string {
 `
 
 func TestGolden(t *testing.T) {
-	testenv.NeedsTool(t, "go")
-
-	dir, err := ioutil.TempDir("", "stringer")
+	dir, err := ioutil.TempDir("", "enumer")
 	if err != nil {
 		t.Error(err)
 	}
